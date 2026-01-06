@@ -5,7 +5,9 @@
       "Bash(pnpm tsc:*)",
       "Bash(source ~/.nvm/nvm.sh)",
       "Bash(nvm use:*)",
-      "Bash(pnpm build:*)"
+      "Bash(pnpm build:*)",
+      "Bash(cat:*)",
+      "Bash(BASE_URL=/geometric-background-generator/ pnpm build:*)"
     ]
   }
 }
