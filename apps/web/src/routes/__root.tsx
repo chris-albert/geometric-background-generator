@@ -10,30 +10,32 @@ export const Route = createRootRoute({
 function RootLayout() {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      <AppBar position="static">
-        <Toolbar>
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+      <AppBar position="static" sx={{ boxShadow: 1 }}>
+        <Toolbar variant="dense" sx={{ minHeight: 48 }}>
+          <Typography variant="body1" fontWeight="medium" component="div" sx={{ flexGrow: 1 }}>
             Geometric Background Generator
           </Typography>
           <Button
             color="inherit"
+            size="small"
             component={Link}
             to="/"
-            startIcon={<HomeIcon />}
+            startIcon={<HomeIcon fontSize="small" />}
           >
             Generator
           </Button>
           <Button
             color="inherit"
+            size="small"
             component={Link}
             to="/about"
-            startIcon={<InfoIcon />}
+            startIcon={<InfoIcon fontSize="small" />}
           >
             About
           </Button>
         </Toolbar>
       </AppBar>
-      <Container maxWidth={false} sx={{ flex: 1, py: 3 }}>
+      <Container maxWidth={false} sx={{ flex: 1, py: 1.5 }}>
         <Outlet />
       </Container>
     </Box>

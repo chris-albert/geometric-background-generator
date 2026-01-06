@@ -25,21 +25,25 @@ function GeneratorPage() {
   }, []);
 
   return (
-    <Box sx={{ height: 'calc(100vh - 120px)', display: 'flex', gap: 2 }}>
+    <Box sx={{ height: 'calc(100vh - 72px)', display: 'flex', gap: 1.5 }}>
       <Box sx={{ flex: 1, minWidth: 0 }}>
         <GeometricCanvas ref={canvasRef} config={config} seed={seed} />
       </Box>
-      <Box sx={{ width: 320, flexShrink: 0, overflow: 'auto' }}>
-        <ControlPanel
-          config={config}
-          onChange={handleConfigChange}
-          onRegenerate={handleRegenerate}
-        />
-        <ExportPanel
-          canvasRef={canvasRef}
-          width={config.width}
-          height={config.height}
-        />
+      <Box sx={{ width: 280, flexShrink: 0, display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
+          <ControlPanel
+            config={config}
+            onChange={handleConfigChange}
+            onRegenerate={handleRegenerate}
+          />
+        </Box>
+        <Box sx={{ flexShrink: 0, mt: 1.5 }}>
+          <ExportPanel
+            canvasRef={canvasRef}
+            width={config.width}
+            height={config.height}
+          />
+        </Box>
       </Box>
     </Box>
   );

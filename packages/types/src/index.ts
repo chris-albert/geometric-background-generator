@@ -4,10 +4,15 @@ export interface RGB {
   b: number;
 }
 
+export type ShapeType = 'triangle' | 'square' | 'diamond' | 'hexagon';
+
+export const shapeTypes: ShapeType[] = ['triangle', 'square', 'diamond', 'hexagon'];
+
 export interface BackgroundConfig {
   width: number;
   height: number;
-  triangleSize: number;
+  shapeType: ShapeType;
+  shapeSize: number;
   baseColor: RGB;
   colorVariation: number;
   vignetteStrength: number;
@@ -20,7 +25,8 @@ export interface BackgroundConfig {
 export const defaultConfig: BackgroundConfig = {
   width: 1920,
   height: 1080,
-  triangleSize: 30,
+  shapeType: 'triangle',
+  shapeSize: 30,
   baseColor: { r: 35, g: 35, b: 40 },
   colorVariation: 25,
   vignetteStrength: 0,

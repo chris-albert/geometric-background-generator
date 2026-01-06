@@ -13,10 +13,13 @@ import {
   FormControlLabel,
   Stack,
   Divider,
+  ToggleButton,
+  ToggleButtonGroup,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import type { BackgroundConfig, RGB } from '@geometric-bg/types';
+import type { BackgroundConfig, RGB, ShapeType } from '@geometric-bg/types';
+import { shapeTypes } from '@geometric-bg/types';
 
 interface ControlPanelProps {
   config: BackgroundConfig;
@@ -53,27 +56,28 @@ export function ControlPanel({ config, onChange, onRegenerate }: ControlPanelPro
   };
 
   return (
-    <Paper sx={{ p: 2, height: '100%' }}>
-      <Typography variant="h6" gutterBottom>
+    <Paper sx={{ p: 1.5 }}>
+      <Typography variant="subtitle1" fontWeight="medium" gutterBottom>
         Parameters
       </Typography>
 
       <Button
         variant="contained"
         fullWidth
+        size="small"
         startIcon={<RefreshIcon />}
         onClick={onRegenerate}
-        sx={{ mb: 2 }}
+        sx={{ mb: 1.5 }}
       >
         Regenerate
       </Button>
 
-      <Accordion defaultExpanded>
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <Typography>Canvas Size</Typography>
+      <Accordion defaultExpanded disableGutters sx={{ '&:before': { display: 'none' }, boxShadow: 'none', bgcolor: 'transparent', mb: 0.5 }}>
+        <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ minHeight: 36, px: 1, '& .MuiAccordionSummary-content': { my: 0.5 } }}>
+          <Typography variant="body2" fontWeight="medium">Canvas Size</Typography>
         </AccordionSummary>
-        <AccordionDetails>
-          <Stack spacing={2}>
+        <AccordionDetails sx={{ px: 1, py: 1 }}>
+          <Stack spacing={1.5}>
             <TextField
               label="Width"
               type="number"
@@ -110,26 +114,46 @@ export function ControlPanel({ config, onChange, onRegenerate }: ControlPanelPro
         </AccordionDetails>
       </Accordion>
 
-      <Accordion defaultExpanded>
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <Typography>Triangle Settings</Typography>
+      <Accordion defaultExpanded disableGutters sx={{ '&:before': { display: 'none' }, boxShadow: 'none', bgcolor: 'transparent', mb: 0.5 }}>
+        <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ minHeight: 36, px: 1, '& .MuiAccordionSummary-content': { my: 0.5 } }}>
+          <Typography variant="body2" fontWeight="medium">Shape Settings</Typography>
         </AccordionSummary>
-        <AccordionDetails>
-          <Stack spacing={2}>
+        <AccordionDetails sx={{ px: 1, py: 1 }}>
+          <Stack spacing={1.5}>
             <Box>
-              <Typography variant="body2" gutterBottom>
-                Triangle Size: {config.triangleSize}px
+              <Typography variant="caption" color="text.secondary">
+                Shape Type
+              </Typography>
+              <ToggleButtonGroup
+                value={config.shapeType}
+                exclusive
+                onChange={(_, value) => value && onChange({ shapeType: value as ShapeType })}
+                size="small"
+                fullWidth
+                sx={{ flexWrap: 'wrap' }}
+              >
+                {shapeTypes.map((shape) => (
+                  <ToggleButton key={shape} value={shape} sx={{ textTransform: 'capitalize', flex: '1 1 45%' }}>
+                    {shape}
+                  </ToggleButton>
+                ))}
+              </ToggleButtonGroup>
+            </Box>
+            <Box>
+              <Typography variant="caption" color="text.secondary">
+                Shape Size: {config.shapeSize}px
               </Typography>
               <Slider
-                value={config.triangleSize}
-                onChange={(_, value) => onChange({ triangleSize: value as number })}
+                value={config.shapeSize}
+                onChange={(_, value) => onChange({ shapeSize: value as number })}
                 min={10}
                 max={100}
                 step={1}
+                size="small"
               />
             </Box>
             <Box>
-              <Typography variant="body2" gutterBottom>
+              <Typography variant="caption" color="text.secondary">
                 Uniformity: {config.uniformity.toFixed(2)}
               </Typography>
               <Slider
@@ -138,23 +162,21 @@ export function ControlPanel({ config, onChange, onRegenerate }: ControlPanelPro
                 min={0}
                 max={1}
                 step={0.01}
+                size="small"
               />
-              <Typography variant="caption" color="text.secondary">
-                1 = perfect grid, 0 = chaotic
-              </Typography>
             </Box>
           </Stack>
         </AccordionDetails>
       </Accordion>
 
-      <Accordion defaultExpanded>
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <Typography>Colors</Typography>
+      <Accordion defaultExpanded disableGutters sx={{ '&:before': { display: 'none' }, boxShadow: 'none', bgcolor: 'transparent', mb: 0.5 }}>
+        <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ minHeight: 36, px: 1, '& .MuiAccordionSummary-content': { my: 0.5 } }}>
+          <Typography variant="body2" fontWeight="medium">Colors</Typography>
         </AccordionSummary>
-        <AccordionDetails>
-          <Stack spacing={2}>
+        <AccordionDetails sx={{ px: 1, py: 1 }}>
+          <Stack spacing={1.5}>
             <Box>
-              <Typography variant="body2" gutterBottom>
+              <Typography variant="caption" color="text.secondary">
                 Base Color
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -163,8 +185,8 @@ export function ControlPanel({ config, onChange, onRegenerate }: ControlPanelPro
                   value={rgbToHex(config.baseColor)}
                   onChange={(e) => onChange({ baseColor: hexToRgb(e.target.value) })}
                   style={{
-                    width: 48,
-                    height: 48,
+                    width: 36,
+                    height: 36,
                     border: 'none',
                     borderRadius: 4,
                     cursor: 'pointer',
@@ -177,7 +199,7 @@ export function ControlPanel({ config, onChange, onRegenerate }: ControlPanelPro
             </Box>
 
             <Box>
-              <Typography variant="body2" gutterBottom>
+              <Typography variant="caption" color="text.secondary">
                 Color Variation: {config.colorVariation}
               </Typography>
               <Slider
@@ -186,6 +208,7 @@ export function ControlPanel({ config, onChange, onRegenerate }: ControlPanelPro
                 min={0}
                 max={100}
                 step={1}
+                size="small"
               />
             </Box>
 
@@ -194,17 +217,18 @@ export function ControlPanel({ config, onChange, onRegenerate }: ControlPanelPro
             <FormControlLabel
               control={
                 <Switch
+                  size="small"
                   checked={useAccentColor}
                   onChange={(e) => handleAccentToggle(e.target.checked)}
                 />
               }
-              label="Enable Accent Color"
+              label={<Typography variant="body2">Enable Accent Color</Typography>}
             />
 
             {useAccentColor && (
               <>
                 <Box>
-                  <Typography variant="body2" gutterBottom>
+                  <Typography variant="caption" color="text.secondary">
                     Accent Color
                   </Typography>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -213,8 +237,8 @@ export function ControlPanel({ config, onChange, onRegenerate }: ControlPanelPro
                       value={config.accentColor ? rgbToHex(config.accentColor) : '#5078c8'}
                       onChange={(e) => onChange({ accentColor: hexToRgb(e.target.value) })}
                       style={{
-                        width: 48,
-                        height: 48,
+                        width: 36,
+                        height: 36,
                         border: 'none',
                         borderRadius: 4,
                         cursor: 'pointer',
@@ -229,7 +253,7 @@ export function ControlPanel({ config, onChange, onRegenerate }: ControlPanelPro
                 </Box>
 
                 <Box>
-                  <Typography variant="body2" gutterBottom>
+                  <Typography variant="caption" color="text.secondary">
                     Accent Frequency: {(config.accentFrequency * 100).toFixed(0)}%
                   </Typography>
                   <Slider
@@ -238,11 +262,12 @@ export function ControlPanel({ config, onChange, onRegenerate }: ControlPanelPro
                     min={0}
                     max={0.5}
                     step={0.01}
+                    size="small"
                   />
                 </Box>
 
                 <Box>
-                  <Typography variant="body2" gutterBottom>
+                  <Typography variant="caption" color="text.secondary">
                     Accent Strength: {config.accentStrength.toFixed(2)}
                   </Typography>
                   <Slider
@@ -251,10 +276,8 @@ export function ControlPanel({ config, onChange, onRegenerate }: ControlPanelPro
                     min={0}
                     max={1}
                     step={0.01}
+                    size="small"
                   />
-                  <Typography variant="caption" color="text.secondary">
-                    0 = subtle blend, 1 = full accent
-                  </Typography>
                 </Box>
               </>
             )}
@@ -262,13 +285,13 @@ export function ControlPanel({ config, onChange, onRegenerate }: ControlPanelPro
         </AccordionDetails>
       </Accordion>
 
-      <Accordion defaultExpanded>
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <Typography>Effects</Typography>
+      <Accordion defaultExpanded disableGutters sx={{ '&:before': { display: 'none' }, boxShadow: 'none', bgcolor: 'transparent', mb: 0.5 }}>
+        <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ minHeight: 36, px: 1, '& .MuiAccordionSummary-content': { my: 0.5 } }}>
+          <Typography variant="body2" fontWeight="medium">Effects</Typography>
         </AccordionSummary>
-        <AccordionDetails>
+        <AccordionDetails sx={{ px: 1, py: 1 }}>
           <Box>
-            <Typography variant="body2" gutterBottom>
+            <Typography variant="caption" color="text.secondary">
               Vignette Strength: {config.vignetteStrength.toFixed(2)}
             </Typography>
             <Slider
@@ -277,10 +300,8 @@ export function ControlPanel({ config, onChange, onRegenerate }: ControlPanelPro
               min={0}
               max={1}
               step={0.01}
+              size="small"
             />
-            <Typography variant="caption" color="text.secondary">
-              Darkens edges toward center
-            </Typography>
           </Box>
         </AccordionDetails>
       </Accordion>

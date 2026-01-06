@@ -71,47 +71,43 @@ export function ExportPanel({ canvasRef, width, height }: ExportPanelProps) {
   };
 
   return (
-    <Paper sx={{ p: 2, mt: 2 }}>
-      <Typography variant="h6" gutterBottom>
+    <Paper sx={{ p: 1.5 }}>
+      <Typography variant="subtitle1" fontWeight="medium" gutterBottom>
         Export
       </Typography>
 
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+        <Alert severity="error" sx={{ mb: 1, py: 0 }} onClose={() => setError(null)}>
           {error}
         </Alert>
       )}
 
-      <Stack spacing={2}>
+      <Stack spacing={1}>
         <ToggleButtonGroup
           value={format}
           exclusive
           onChange={(_, value) => value && setFormat(value)}
           fullWidth
+          size="small"
         >
           <ToggleButton value="png">PNG</ToggleButton>
           <ToggleButton value="jpeg">JPEG</ToggleButton>
           <ToggleButton value="svg">SVG</ToggleButton>
         </ToggleButtonGroup>
 
-        <Typography variant="caption" color="text.secondary">
-          {format === 'png' && 'Lossless format with transparency support'}
-          {format === 'jpeg' && 'Compressed format, smaller file size'}
-          {format === 'svg' && 'Vector format, infinitely scalable'}
-        </Typography>
-
         <Button
           variant="contained"
           color="secondary"
-          startIcon={exporting ? <CircularProgress size={20} color="inherit" /> : <DownloadIcon />}
+          size="small"
+          startIcon={exporting ? <CircularProgress size={16} color="inherit" /> : <DownloadIcon />}
           onClick={handleExport}
           disabled={exporting}
         >
           {exporting ? 'Exporting...' : `Download ${format.toUpperCase()}`}
         </Button>
 
-        <Typography variant="body2" color="text.secondary">
-          Output size: {width} x {height} pixels
+        <Typography variant="caption" color="text.secondary">
+          {width} x {height}px
         </Typography>
       </Stack>
     </Paper>
