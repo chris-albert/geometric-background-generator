@@ -1,6 +1,6 @@
 import { useRef, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { Paper, Box } from '@mui/material';
-import type { BackgroundConfig, Point, RGB } from '@geometric-bg/types';
+import type { BackgroundConfig, Point, RGB, GradientDirection } from '@geometric-bg/types';
 
 interface GeometricCanvasProps {
   config: BackgroundConfig;
@@ -24,14 +24,108 @@ function createSeededRandom(seed: number) {
 
 interface ColorParams {
   baseColor: RGB;
+  secondaryColor: RGB | undefined;
+  secondaryColorBlend: number;
   colorVariation: number;
+  saturationVariation: number;
+  brightnessVariation: number;
   centerX: number;
   centerY: number;
+  width: number;
+  height: number;
   maxDist: number;
   vignetteStrength: number;
+  gradientDirection: GradientDirection;
   accentColor: RGB | undefined;
   accentFrequency: number;
   accentStrength: number;
+}
+
+interface ShapeResult {
+  svg: string;
+  isAccent: boolean;
+}
+
+// Convert RGB to HSL
+function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
+  r /= 255;
+  g /= 255;
+  b /= 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  let h = 0;
+  let s = 0;
+  const l = (max + min) / 2;
+
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r:
+        h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+        break;
+      case g:
+        h = ((b - r) / d + 2) / 6;
+        break;
+      case b:
+        h = ((r - g) / d + 4) / 6;
+        break;
+    }
+  }
+  return [h * 360, s * 100, l * 100];
+}
+
+// Convert HSL to RGB
+function hslToRgb(h: number, s: number, l: number): RGB {
+  h /= 360;
+  s /= 100;
+  l /= 100;
+  let r, g, b;
+
+  if (s === 0) {
+    r = g = b = l;
+  } else {
+    const hue2rgb = (p: number, q: number, t: number) => {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1 / 6) return p + (q - p) * 6 * t;
+      if (t < 1 / 2) return q;
+      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+      return p;
+    };
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    r = hue2rgb(p, q, h + 1 / 3);
+    g = hue2rgb(p, q, h);
+    b = hue2rgb(p, q, h - 1 / 3);
+  }
+  return {
+    r: Math.round(r * 255),
+    g: Math.round(g * 255),
+    b: Math.round(b * 255),
+  };
+}
+
+function getGradientFactor(
+  x: number,
+  y: number,
+  params: ColorParams
+): number {
+  const { gradientDirection, centerX, centerY, width, height, maxDist } = params;
+
+  switch (gradientDirection) {
+    case 'horizontal':
+      return x / width;
+    case 'vertical':
+      return y / height;
+    case 'diagonal':
+      return (x / width + y / height) / 2;
+    case 'radial':
+    default: {
+      const dist = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
+      return dist / maxDist;
+    }
+  }
 }
 
 function computeShapeColor(
@@ -39,53 +133,158 @@ function computeShapeColor(
   centroidY: number,
   params: ColorParams,
   random: () => number
-): string {
-  const { baseColor, colorVariation, centerX, centerY, maxDist, vignetteStrength, accentColor, accentFrequency, accentStrength } = params;
+): { color: string; isAccent: boolean; opacity: number } {
+  const {
+    baseColor,
+    secondaryColor,
+    secondaryColorBlend,
+    colorVariation,
+    saturationVariation,
+    brightnessVariation,
+    vignetteStrength,
+    accentColor,
+    accentFrequency,
+    accentStrength,
+  } = params;
 
-  const dist = Math.sqrt((centroidX - centerX) ** 2 + (centroidY - centerY) ** 2);
-  const vignette = 1 - (dist / maxDist) * vignetteStrength;
+  const gradientFactor = getGradientFactor(centroidX, centroidY, params);
+  const vignette = 1 - gradientFactor * vignetteStrength;
 
   const isAccent = accentColor && random() < accentFrequency;
 
-  let useColor = baseColor;
-  if (isAccent && accentColor) {
+  // Start with base color, blend with secondary if present
+  let useColor = { ...baseColor };
+  if (secondaryColor && secondaryColorBlend > 0) {
+    const blend = gradientFactor * secondaryColorBlend;
     useColor = {
-      r: baseColor.r + (accentColor.r - baseColor.r) * accentStrength,
-      g: baseColor.g + (accentColor.g - baseColor.g) * accentStrength,
-      b: baseColor.b + (accentColor.b - baseColor.b) * accentStrength,
+      r: baseColor.r + (secondaryColor.r - baseColor.r) * blend,
+      g: baseColor.g + (secondaryColor.g - baseColor.g) * blend,
+      b: baseColor.b + (secondaryColor.b - baseColor.b) * blend,
     };
   }
 
+  // Apply accent color
+  if (isAccent && accentColor) {
+    useColor = {
+      r: useColor.r + (accentColor.r - useColor.r) * accentStrength,
+      g: useColor.g + (accentColor.g - useColor.g) * accentStrength,
+      b: useColor.b + (accentColor.b - useColor.b) * accentStrength,
+    };
+  }
+
+  // Convert to HSL for saturation/brightness variation
+  let [h, s, l] = rgbToHsl(useColor.r, useColor.g, useColor.b);
+
+  // Apply saturation variation
+  if (saturationVariation > 0) {
+    s = Math.max(0, Math.min(100, s + (random() - 0.5) * saturationVariation * 2));
+  }
+
+  // Apply brightness variation
+  if (brightnessVariation > 0) {
+    l = Math.max(0, Math.min(100, l + (random() - 0.5) * brightnessVariation * 2));
+  }
+
+  // Convert back to RGB
+  useColor = hslToRgb(h, s, l);
+
+  // Apply color variation
   const variation = (random() - 0.5) * colorVariation * 2;
   const r = Math.max(0, Math.min(255, Math.round((useColor.r + variation) * vignette)));
   const g = Math.max(0, Math.min(255, Math.round((useColor.g + variation) * vignette)));
   const b = Math.max(0, Math.min(255, Math.round((useColor.b + variation) * vignette)));
 
-  return `rgb(${r},${g},${b})`;
+  return { color: `rgb(${r},${g},${b})`, isAccent: !!isAccent, opacity: 1 };
 }
 
-function generateTriangles(config: BackgroundConfig, random: () => number, colorParams: ColorParams): string[] {
-  const { width, height, shapeSize, uniformity } = config;
+function rotatePoint(point: Point, center: Point, angle: number): Point {
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const dx = point.x - center.x;
+  const dy = point.y - center.y;
+  return {
+    x: center.x + dx * cos - dy * sin,
+    y: center.y + dx * sin + dy * cos,
+  };
+}
 
+function scalePoint(point: Point, center: Point, scale: number): Point {
+  return {
+    x: center.x + (point.x - center.x) * scale,
+    y: center.y + (point.y - center.y) * scale,
+  };
+}
+
+function createPolygonSvg(
+  vertices: Point[],
+  fillColor: string,
+  opacity: number,
+  config: BackgroundConfig,
+  isAccent: boolean,
+  random: () => number
+): string {
+  const { strokeWidth, strokeColor, rotation, sizeVariation, opacityVariation, minOpacity, glowStrength } = config;
+
+  // Calculate centroid
+  const centroidX = vertices.reduce((sum, v) => sum + v.x, 0) / vertices.length;
+  const centroidY = vertices.reduce((sum, v) => sum + v.y, 0) / vertices.length;
+  const center = { x: centroidX, y: centroidY };
+
+  // Apply size variation
+  let transformedVertices = vertices;
+  if (sizeVariation > 0) {
+    const scale = 1 - random() * sizeVariation;
+    transformedVertices = transformedVertices.map((v) => scalePoint(v, center, scale));
+  }
+
+  // Apply rotation
+  if (rotation > 0) {
+    const angle = (random() - 0.5) * rotation * Math.PI * 2;
+    transformedVertices = transformedVertices.map((v) => rotatePoint(v, center, angle));
+  }
+
+  // Apply opacity variation
+  let finalOpacity = opacity;
+  if (opacityVariation > 0) {
+    finalOpacity = minOpacity + random() * (1 - minOpacity) * (1 - opacityVariation) + random() * opacityVariation * (1 - minOpacity);
+    finalOpacity = Math.max(minOpacity, Math.min(1, finalOpacity));
+  }
+
+  const pointsStr = transformedVertices.map((v) => `${v.x.toFixed(2)},${v.y.toFixed(2)}`).join(' ');
+
+  const stroke = strokeWidth > 0
+    ? `stroke="${strokeColor ? `rgb(${strokeColor.r},${strokeColor.g},${strokeColor.b})` : fillColor}" stroke-width="${strokeWidth}"`
+    : `stroke="${fillColor}" stroke-width="0.5"`;
+
+  const opacityAttr = finalOpacity < 1 ? ` opacity="${finalOpacity.toFixed(2)}"` : '';
+  const filterAttr = isAccent && glowStrength > 0 ? ' filter="url(#glow)"' : '';
+
+  return `<polygon points="${pointsStr}" fill="${fillColor}" ${stroke}${opacityAttr}${filterAttr}/>`;
+}
+
+function generateTriangles(config: BackgroundConfig, random: () => number, colorParams: ColorParams): ShapeResult[] {
+  const { width, height, shapeSize, uniformity, density } = config;
+
+  const adjustedSize = shapeSize / density;
   const jitterAmount = (1 - uniformity) * 0.5;
-  const cols = Math.ceil(width / shapeSize) + 2;
-  const rows = Math.ceil(height / (shapeSize * 0.866)) + 2;
+  const cols = Math.ceil(width / adjustedSize) + 2;
+  const rows = Math.ceil(height / (adjustedSize * 0.866)) + 2;
   const points: Point[][] = [];
 
   for (let row = 0; row <= rows; row++) {
     points[row] = [];
     for (let col = 0; col <= cols; col++) {
-      const xOffset = row % 2 === 0 ? 0 : shapeSize / 2;
-      const jitterX = (random() - 0.5) * shapeSize * jitterAmount * 2;
-      const jitterY = (random() - 0.5) * shapeSize * jitterAmount * 2;
+      const xOffset = row % 2 === 0 ? 0 : adjustedSize / 2;
+      const jitterX = (random() - 0.5) * adjustedSize * jitterAmount * 2;
+      const jitterY = (random() - 0.5) * adjustedSize * jitterAmount * 2;
       points[row][col] = {
-        x: col * shapeSize + xOffset + jitterX,
-        y: row * shapeSize * 0.866 + jitterY,
+        x: col * adjustedSize + xOffset + jitterX,
+        y: row * adjustedSize * 0.866 + jitterY,
       };
     }
   }
 
-  const shapes: string[] = [];
+  const shapes: ShapeResult[] = [];
 
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
@@ -97,23 +296,35 @@ function generateTriangles(config: BackgroundConfig, random: () => number, color
       if (row % 2 === 0) {
         const centroid1X = (topLeft.x + topRight.x + bottomLeft.x) / 3;
         const centroid1Y = (topLeft.y + topRight.y + bottomLeft.y) / 3;
-        const color1 = computeShapeColor(centroid1X, centroid1Y, colorParams, random);
-        shapes.push(`<polygon points="${topLeft.x.toFixed(2)},${topLeft.y.toFixed(2)} ${topRight.x.toFixed(2)},${topRight.y.toFixed(2)} ${bottomLeft.x.toFixed(2)},${bottomLeft.y.toFixed(2)}" fill="${color1}" stroke="${color1}" stroke-width="0.5"/>`);
+        const { color: color1, isAccent: isAccent1, opacity: opacity1 } = computeShapeColor(centroid1X, centroid1Y, colorParams, random);
+        shapes.push({
+          svg: createPolygonSvg([topLeft, topRight, bottomLeft], color1, opacity1, config, isAccent1, random),
+          isAccent: isAccent1,
+        });
 
         const centroid2X = (topRight.x + bottomRight.x + bottomLeft.x) / 3;
         const centroid2Y = (topRight.y + bottomRight.y + bottomLeft.y) / 3;
-        const color2 = computeShapeColor(centroid2X, centroid2Y, colorParams, random);
-        shapes.push(`<polygon points="${topRight.x.toFixed(2)},${topRight.y.toFixed(2)} ${bottomRight.x.toFixed(2)},${bottomRight.y.toFixed(2)} ${bottomLeft.x.toFixed(2)},${bottomLeft.y.toFixed(2)}" fill="${color2}" stroke="${color2}" stroke-width="0.5"/>`);
+        const { color: color2, isAccent: isAccent2, opacity: opacity2 } = computeShapeColor(centroid2X, centroid2Y, colorParams, random);
+        shapes.push({
+          svg: createPolygonSvg([topRight, bottomRight, bottomLeft], color2, opacity2, config, isAccent2, random),
+          isAccent: isAccent2,
+        });
       } else {
         const centroid1X = (topLeft.x + topRight.x + bottomRight.x) / 3;
         const centroid1Y = (topLeft.y + topRight.y + bottomRight.y) / 3;
-        const color1 = computeShapeColor(centroid1X, centroid1Y, colorParams, random);
-        shapes.push(`<polygon points="${topLeft.x.toFixed(2)},${topLeft.y.toFixed(2)} ${topRight.x.toFixed(2)},${topRight.y.toFixed(2)} ${bottomRight.x.toFixed(2)},${bottomRight.y.toFixed(2)}" fill="${color1}" stroke="${color1}" stroke-width="0.5"/>`);
+        const { color: color1, isAccent: isAccent1, opacity: opacity1 } = computeShapeColor(centroid1X, centroid1Y, colorParams, random);
+        shapes.push({
+          svg: createPolygonSvg([topLeft, topRight, bottomRight], color1, opacity1, config, isAccent1, random),
+          isAccent: isAccent1,
+        });
 
         const centroid2X = (topLeft.x + bottomRight.x + bottomLeft.x) / 3;
         const centroid2Y = (topLeft.y + bottomRight.y + bottomLeft.y) / 3;
-        const color2 = computeShapeColor(centroid2X, centroid2Y, colorParams, random);
-        shapes.push(`<polygon points="${topLeft.x.toFixed(2)},${topLeft.y.toFixed(2)} ${bottomRight.x.toFixed(2)},${bottomRight.y.toFixed(2)} ${bottomLeft.x.toFixed(2)},${bottomLeft.y.toFixed(2)}" fill="${color2}" stroke="${color2}" stroke-width="0.5"/>`);
+        const { color: color2, isAccent: isAccent2, opacity: opacity2 } = computeShapeColor(centroid2X, centroid2Y, colorParams, random);
+        shapes.push({
+          svg: createPolygonSvg([topLeft, bottomRight, bottomLeft], color2, opacity2, config, isAccent2, random),
+          isAccent: isAccent2,
+        });
       }
     }
   }
@@ -121,28 +332,28 @@ function generateTriangles(config: BackgroundConfig, random: () => number, color
   return shapes;
 }
 
-function generateSquares(config: BackgroundConfig, random: () => number, colorParams: ColorParams): string[] {
-  const { width, height, shapeSize, uniformity } = config;
+function generateSquares(config: BackgroundConfig, random: () => number, colorParams: ColorParams): ShapeResult[] {
+  const { width, height, shapeSize, uniformity, density } = config;
 
+  const adjustedSize = shapeSize / density;
   const jitterAmount = (1 - uniformity) * 0.5;
-  const cols = Math.ceil(width / shapeSize) + 2;
-  const rows = Math.ceil(height / shapeSize) + 2;
+  const cols = Math.ceil(width / adjustedSize) + 2;
+  const rows = Math.ceil(height / adjustedSize) + 2;
 
-  // Generate shared vertex grid
   const points: Point[][] = [];
   for (let row = 0; row <= rows; row++) {
     points[row] = [];
     for (let col = 0; col <= cols; col++) {
-      const jitterX = (random() - 0.5) * shapeSize * jitterAmount * 2;
-      const jitterY = (random() - 0.5) * shapeSize * jitterAmount * 2;
+      const jitterX = (random() - 0.5) * adjustedSize * jitterAmount * 2;
+      const jitterY = (random() - 0.5) * adjustedSize * jitterAmount * 2;
       points[row][col] = {
-        x: col * shapeSize + jitterX,
-        y: row * shapeSize + jitterY,
+        x: col * adjustedSize + jitterX,
+        y: row * adjustedSize + jitterY,
       };
     }
   }
 
-  const shapes: string[] = [];
+  const shapes: ShapeResult[] = [];
 
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
@@ -153,33 +364,34 @@ function generateSquares(config: BackgroundConfig, random: () => number, colorPa
 
       const centroidX = (tl.x + tr.x + bl.x + br.x) / 4;
       const centroidY = (tl.y + tr.y + bl.y + br.y) / 4;
-      const color = computeShapeColor(centroidX, centroidY, colorParams, random);
+      const { color, isAccent, opacity } = computeShapeColor(centroidX, centroidY, colorParams, random);
 
-      shapes.push(`<polygon points="${tl.x.toFixed(2)},${tl.y.toFixed(2)} ${tr.x.toFixed(2)},${tr.y.toFixed(2)} ${br.x.toFixed(2)},${br.y.toFixed(2)} ${bl.x.toFixed(2)},${bl.y.toFixed(2)}" fill="${color}" stroke="${color}" stroke-width="0.5"/>`);
+      shapes.push({
+        svg: createPolygonSvg([tl, tr, br, bl], color, opacity, config, isAccent, random),
+        isAccent,
+      });
     }
   }
 
   return shapes;
 }
 
-function generateDiamonds(config: BackgroundConfig, random: () => number, colorParams: ColorParams): string[] {
-  const { width, height, shapeSize, uniformity } = config;
+function generateDiamonds(config: BackgroundConfig, random: () => number, colorParams: ColorParams): ShapeResult[] {
+  const { width, height, shapeSize, uniformity, density } = config;
 
+  const adjustedSize = shapeSize / density;
   const jitterAmount = (1 - uniformity) * 0.5;
-  const halfSize = shapeSize / 2;
+  const halfSize = adjustedSize / 2;
 
-  // Diamonds tile in a grid where each diamond center alternates
-  // We need points at every half-step in both directions
   const cols = Math.ceil(width / halfSize) + 3;
   const rows = Math.ceil(height / halfSize) + 3;
 
-  // Generate shared vertex grid (checkerboard pattern of diamond centers and corners)
   const points: Point[][] = [];
   for (let row = 0; row <= rows; row++) {
     points[row] = [];
     for (let col = 0; col <= cols; col++) {
-      const jitterX = (random() - 0.5) * shapeSize * jitterAmount * 2;
-      const jitterY = (random() - 0.5) * shapeSize * jitterAmount * 2;
+      const jitterX = (random() - 0.5) * adjustedSize * jitterAmount * 2;
+      const jitterY = (random() - 0.5) * adjustedSize * jitterAmount * 2;
       points[row][col] = {
         x: col * halfSize + jitterX,
         y: row * halfSize + jitterY,
@@ -187,12 +399,10 @@ function generateDiamonds(config: BackgroundConfig, random: () => number, colorP
     }
   }
 
-  const shapes: string[] = [];
+  const shapes: ShapeResult[] = [];
 
-  // Create diamonds - each diamond uses 4 points in a + pattern
   for (let row = 1; row < rows; row++) {
     for (let col = 1; col < cols; col++) {
-      // Only create diamond if row+col is even (checkerboard pattern)
       if ((row + col) % 2 === 0) {
         const top = points[row - 1][col];
         const right = points[row][col + 1];
@@ -201,9 +411,12 @@ function generateDiamonds(config: BackgroundConfig, random: () => number, colorP
 
         const centroidX = (top.x + right.x + bottom.x + left.x) / 4;
         const centroidY = (top.y + right.y + bottom.y + left.y) / 4;
-        const color = computeShapeColor(centroidX, centroidY, colorParams, random);
+        const { color, isAccent, opacity } = computeShapeColor(centroidX, centroidY, colorParams, random);
 
-        shapes.push(`<polygon points="${top.x.toFixed(2)},${top.y.toFixed(2)} ${right.x.toFixed(2)},${right.y.toFixed(2)} ${bottom.x.toFixed(2)},${bottom.y.toFixed(2)} ${left.x.toFixed(2)},${left.y.toFixed(2)}" fill="${color}" stroke="${color}" stroke-width="0.5"/>`);
+        shapes.push({
+          svg: createPolygonSvg([top, right, bottom, left], color, opacity, config, isAccent, random),
+          isAccent,
+        });
       }
     }
   }
@@ -211,30 +424,27 @@ function generateDiamonds(config: BackgroundConfig, random: () => number, colorP
   return shapes;
 }
 
-function generateHexagons(config: BackgroundConfig, random: () => number, colorParams: ColorParams): string[] {
-  const { width, height, shapeSize, uniformity } = config;
+function generateHexagons(config: BackgroundConfig, random: () => number, colorParams: ColorParams): ShapeResult[] {
+  const { width, height, shapeSize, uniformity, density } = config;
 
+  const adjustedSize = shapeSize / density;
   const jitterAmount = (1 - uniformity) * 0.5;
 
-  // Hexagon geometry (flat-top orientation for easier vertex sharing)
-  const r = shapeSize / 2; // radius (center to vertex)
-  const hexWidth = r * 2; // width of flat-top hexagon
-  const hexHeight = r * Math.sqrt(3); // height of flat-top hexagon
-  const horizSpacing = hexWidth * 0.75; // horizontal distance between hex centers
-  const vertSpacing = hexHeight; // vertical distance between hex centers
+  const r = adjustedSize / 2;
+  const hexWidth = r * 2;
+  const hexHeight = r * Math.sqrt(3);
+  const horizSpacing = hexWidth * 0.75;
+  const vertSpacing = hexHeight;
 
   const cols = Math.ceil(width / horizSpacing) + 3;
   const rows = Math.ceil(height / vertSpacing) + 3;
 
-  // Generate a grid of unique vertices that hexagons will share
-  // For flat-top hexagons, vertices fall on a specific pattern
-  // Each vertex is shared by up to 3 hexagons
   const vertexMap = new Map<string, Point>();
 
   const getVertex = (key: string, baseX: number, baseY: number): Point => {
     if (!vertexMap.has(key)) {
-      const jitterX = (random() - 0.5) * shapeSize * jitterAmount * 2;
-      const jitterY = (random() - 0.5) * shapeSize * jitterAmount * 2;
+      const jitterX = (random() - 0.5) * adjustedSize * jitterAmount * 2;
+      const jitterY = (random() - 0.5) * adjustedSize * jitterAmount * 2;
       vertexMap.set(key, {
         x: baseX + jitterX,
         y: baseY + jitterY,
@@ -243,7 +453,7 @@ function generateHexagons(config: BackgroundConfig, random: () => number, colorP
     return vertexMap.get(key)!;
   };
 
-  const shapes: string[] = [];
+  const shapes: ShapeResult[] = [];
 
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
@@ -251,20 +461,9 @@ function generateHexagons(config: BackgroundConfig, random: () => number, colorP
       const cx = col * horizSpacing;
       const cy = row * vertSpacing + yOffset;
 
-      // Get the 6 vertices for this hexagon using shared vertex keys
-      // Flat-top hexagon vertices (starting from right, going counter-clockwise):
-      // 0: right (+r, 0)
-      // 1: top-right (+r/2, -h/2)
-      // 2: top-left (-r/2, -h/2)
-      // 3: left (-r, 0)
-      // 4: bottom-left (-r/2, +h/2)
-      // 5: bottom-right (+r/2, +h/2)
-
       const h2 = hexHeight / 2;
       const r2 = r / 2;
 
-      // Create unique keys for each vertex based on its absolute position
-      // Round to avoid floating point issues
       const round = (n: number) => Math.round(n * 100);
 
       const vertices: Point[] = [
@@ -278,18 +477,34 @@ function generateHexagons(config: BackgroundConfig, random: () => number, colorP
 
       const centroidX = vertices.reduce((sum, v) => sum + v.x, 0) / 6;
       const centroidY = vertices.reduce((sum, v) => sum + v.y, 0) / 6;
-      const color = computeShapeColor(centroidX, centroidY, colorParams, random);
+      const { color, isAccent, opacity } = computeShapeColor(centroidX, centroidY, colorParams, random);
 
-      const pointsStr = vertices.map(v => `${v.x.toFixed(2)},${v.y.toFixed(2)}`).join(' ');
-      shapes.push(`<polygon points="${pointsStr}" fill="${color}" stroke="${color}" stroke-width="0.5"/>`);
+      shapes.push({
+        svg: createPolygonSvg(vertices, color, opacity, config, isAccent, random),
+        isAccent,
+      });
     }
   }
 
   return shapes;
 }
 
-function generateShapes(config: BackgroundConfig, random: () => number): string[] {
-  const { width, height, baseColor, colorVariation, vignetteStrength, accentColor, accentFrequency, accentStrength } = config;
+function generateShapes(config: BackgroundConfig, random: () => number): ShapeResult[] {
+  const {
+    width,
+    height,
+    baseColor,
+    secondaryColor,
+    secondaryColorBlend,
+    colorVariation,
+    saturationVariation,
+    brightnessVariation,
+    vignetteStrength,
+    gradientDirection,
+    accentColor,
+    accentFrequency,
+    accentStrength,
+  } = config;
 
   const centerX = width / 2;
   const centerY = height / 2;
@@ -297,11 +512,18 @@ function generateShapes(config: BackgroundConfig, random: () => number): string[
 
   const colorParams: ColorParams = {
     baseColor,
+    secondaryColor,
+    secondaryColorBlend,
     colorVariation,
+    saturationVariation,
+    brightnessVariation,
     centerX,
     centerY,
+    width,
+    height,
     maxDist,
     vignetteStrength,
+    gradientDirection,
     accentColor,
     accentFrequency,
     accentStrength,
@@ -327,12 +549,32 @@ export const GeometricCanvas = forwardRef<GeometricCanvasHandle, GeometricCanvas
 
     const svgContent = useMemo(() => {
       const random = createSeededRandom(seed);
-      const shapes = generateShapes(config, random);
-      const { width, height, baseColor } = config;
+      const shapeResults = generateShapes(config, random);
+      const { width, height, baseColor, glowStrength, glowSize, accentColor } = config;
+
+      // Separate accent and non-accent shapes for layering
+      const normalShapes = shapeResults.filter((s) => !s.isAccent).map((s) => s.svg);
+      const accentShapes = shapeResults.filter((s) => s.isAccent).map((s) => s.svg);
+
+      // Create glow filter if needed
+      const glowFilter =
+        glowStrength > 0 && accentColor
+          ? `<defs>
+          <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="${glowSize}" result="coloredBlur"/>
+            <feMerge>
+              <feMergeNode in="coloredBlur"/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+          </filter>
+        </defs>`
+          : '';
 
       return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
+        ${glowFilter}
         <rect width="100%" height="100%" fill="rgb(${baseColor.r},${baseColor.g},${baseColor.b})"/>
-        ${shapes.join('\n')}
+        ${normalShapes.join('\n')}
+        ${accentShapes.join('\n')}
       </svg>`;
     }, [config, seed]);
 
