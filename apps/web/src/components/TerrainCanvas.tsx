@@ -17,6 +17,14 @@ function rgb(c: RGB, alpha = 1): string {
   return `rgba(${c.r}, ${c.g}, ${c.b}, ${alpha})`;
 }
 
+function mix(a: RGB, b: RGB, t: number): RGB {
+  return {
+    r: Math.round(a.r + (b.r - a.r) * t),
+    g: Math.round(a.g + (b.g - a.g) * t),
+    b: Math.round(a.b + (b.b - a.b) * t),
+  };
+}
+
 // Deterministic pseudo-random value in [0, 1) for an integer lattice point
 function hash2(ix: number, iz: number, seed: number): number {
   let h = Math.imul(ix, 374761393) ^ Math.imul(iz, 668265263) ^ seed;
@@ -181,12 +189,18 @@ function drawTerrain(ctx: CanvasRenderingContext2D, config: TerrainConfig, seed:
   }
 
   ctx.lineJoin = 'round';
-  ctx.shadowColor = rgb(lineColor);
+
+  // Line and surface colours run from their near colour at the front row to their far
+  // colour at the last row
+  const lineColorAt = (row: number) => mix(lineColor, config.lineColorFar, row / rows);
+  const surfaceColorAt = (row: number) => mix(surfaceColor, config.surfaceColorFar, row / rows);
 
   const setLineStyle = (row: number) => {
     const depth = Math.min(1, (row * cellSize) / drawDistance);
+    const color = lineColorAt(row);
+    ctx.shadowColor = rgb(color);
     ctx.shadowBlur = glow * 20 * scale;
-    ctx.strokeStyle = rgb(lineColor, 1 - fog * Math.pow(depth, 1.5));
+    ctx.strokeStyle = rgb(color, 1 - fog * Math.pow(depth, 1.5));
     ctx.lineWidth = Math.max(0.5, lineWidth * scale * (1 - 0.6 * depth));
   };
 
@@ -201,8 +215,9 @@ function drawTerrain(ctx: CanvasRenderingContext2D, config: TerrainConfig, seed:
     const back = (j + 1) * stride;
     const front = j * stride;
 
+    const surface = surfaceColorAt(j);
     ctx.shadowBlur = 0;
-    ctx.fillStyle = rgb(surfaceColor);
+    ctx.fillStyle = rgb(surface);
     ctx.beginPath();
     traceRow(j + 1);
     for (let i = cols; i >= 0; i--) ctx.lineTo(sx[front + i], sy[front + i]);
@@ -212,14 +227,13 @@ function drawTerrain(ctx: CanvasRenderingContext2D, config: TerrainConfig, seed:
     if (shading > 0) {
       const depth = Math.min(1, (j * cellSize) / drawDistance);
       const strength = shading * 0.5 * (1 - fog * Math.pow(depth, 1.5));
+      const line = lineColorAt(j);
       // Fill one face, tinted towards the line colour by how directly it faces the light.
       // dhdx / dhdz are the face's slope to the right and away from the camera.
       const fillFace = (dhdx: number, dhdz: number, a: number, b: number, c: number, d: number) => {
         const lit = (LIGHT_X * -dhdx + LIGHT_Y + LIGHT_Z * -dhdz) / Math.sqrt(dhdx * dhdx + 1 + dhdz * dhdz);
         const t = Math.max(0, lit) * strength;
-        ctx.fillStyle = `rgb(${Math.round(surfaceColor.r + (lineColor.r - surfaceColor.r) * t)}, ${Math.round(
-          surfaceColor.g + (lineColor.g - surfaceColor.g) * t
-        )}, ${Math.round(surfaceColor.b + (lineColor.b - surfaceColor.b) * t)})`;
+        ctx.fillStyle = rgb(mix(surface, line, t));
         ctx.beginPath();
         ctx.moveTo(sx[a], sy[a]);
         ctx.lineTo(sx[b], sy[b]);

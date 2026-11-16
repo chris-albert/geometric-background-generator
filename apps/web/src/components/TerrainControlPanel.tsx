@@ -296,14 +296,24 @@ export function TerrainControlPanel({ config, onChange, onRegenerate }: TerrainC
         <AccordionDetails sx={accordionDetailsSx}>
           <Stack spacing={1.5}>
             <ColorField
-              label="Line Color"
+              label="Line Color (near)"
               value={config.lineColor}
               onChange={(lineColor) => onChange({ lineColor })}
             />
             <ColorField
-              label="Surface Color"
+              label="Line Color (far)"
+              value={config.lineColorFar}
+              onChange={(lineColorFar) => onChange({ lineColorFar })}
+            />
+            <ColorField
+              label="Surface Color (near)"
               value={config.surfaceColor}
               onChange={(surfaceColor) => onChange({ surfaceColor })}
+            />
+            <ColorField
+              label="Surface Color (far)"
+              value={config.surfaceColorFar}
+              onChange={(surfaceColorFar) => onChange({ surfaceColorFar })}
             />
             <SliderField
               label={`Shading: ${(config.shading * 100).toFixed(0)}%`}
