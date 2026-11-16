@@ -306,7 +306,15 @@ export function TerrainControlPanel({ config, onChange, onRegenerate }: TerrainC
               onChange={(surfaceColor) => onChange({ surfaceColor })}
             />
             <SliderField
-              label={`Line Width: ${config.lineWidth.toFixed(1)}`}
+              label={`Shading: ${(config.shading * 100).toFixed(0)}%`}
+              value={config.shading}
+              onChange={(shading) => onChange({ shading })}
+              min={0}
+              max={1}
+              step={0.05}
+            />
+            <SliderField
+              label={`Line Width:${config.lineWidth.toFixed(1)}`}
               value={config.lineWidth}
               onChange={(lineWidth) => onChange({ lineWidth })}
               min={0.5}

@@ -161,6 +161,7 @@ export interface TerrainConfig {
   glow: number; // 0-1
   fog: number; // 0-1, how much lines fade towards the horizon
   surfaceColor: RGB;
+  shading: number; // 0-1, how strongly faces are lit by a directional light
   // Sky
   skyTopColor: RGB;
   skyHorizonColor: RGB;
@@ -188,6 +189,7 @@ export const defaultTerrainConfig: TerrainConfig = {
   glow: 0.6,
   fog: 0.85,
   surfaceColor: { r: 12, g: 4, b: 32 },
+  shading: 0.5,
   skyTopColor: { r: 10, g: 2, b: 35 },
   skyHorizonColor: { r: 120, g: 20, b: 110 },
   showSun: false,
