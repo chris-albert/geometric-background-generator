@@ -17,6 +17,14 @@ function rgb(c: RGB, alpha = 1): string {
   return `rgba(${c.r}, ${c.g}, ${c.b}, ${alpha})`;
 }
 
+function mix(a: RGB, b: RGB, t: number): RGB {
+  return {
+    r: Math.round(a.r + (b.r - a.r) * t),
+    g: Math.round(a.g + (b.g - a.g) * t),
+    b: Math.round(a.b + (b.b - a.b) * t),
+  };
+}
+
 // Deterministic pseudo-random value in [0, 1) for an integer lattice point
 function hash2(ix: number, iz: number, seed: number): number {
   let h = Math.imul(ix, 374761393) ^ Math.imul(iz, 668265263) ^ seed;
@@ -55,6 +63,11 @@ function fbm(x: number, z: number, seed: number): number {
 
 // Distance over which the flat valley floor ramps up into full-height terrain
 const VALLEY_RAMP = 10;
+
+// Unit vector pointing towards the light: from the upper left, slightly behind the camera
+const LIGHT_X = -0.608;
+const LIGHT_Y = 0.355;
+const LIGHT_Z = -0.71;
 
 function terrainHeightAt(x: number, z: number, config: TerrainConfig, seed: number): number {
   const { terrainHeight, roughness, showValley, valleyWidth } = config;
@@ -98,7 +111,7 @@ function drawSun(ctx: CanvasRenderingContext2D, config: TerrainConfig, groundY: 
 function drawTerrain(ctx: CanvasRenderingContext2D, config: TerrainConfig, seed: number) {
   const {
     width, height, meshStyle, cellSize, drawDistance, cameraHeight, horizon,
-    lineColor, lineWidth, glow, fog, surfaceColor, skyTopColor, skyHorizonColor, showSun,
+    lineColor, lineWidth, glow, fog, surfaceColor, shading, skyTopColor, skyHorizonColor, showSun,
   } = config;
 
   // Keep line weight and glow proportional when exporting at other resolutions
@@ -161,6 +174,7 @@ function drawTerrain(ctx: CanvasRenderingContext2D, config: TerrainConfig, seed:
   // Project every vertex to screen space
   const sx = new Float32Array((rows + 1) * stride);
   const sy = new Float32Array((rows + 1) * stride);
+  const hs = new Float32Array((rows + 1) * stride);
   for (let j = 0; j <= rows; j++) {
     const z = zNear + j * cellSize;
     for (let i = 0; i <= cols; i++) {
@@ -168,18 +182,25 @@ function drawTerrain(ctx: CanvasRenderingContext2D, config: TerrainConfig, seed:
       const y = terrainHeightAt(x, z, config, seed);
       const viewDepth = viewDepthOf(y, z);
       const idx = j * stride + i;
+      hs[idx] = y;
       sx[idx] = width / 2 + (focal * x) / viewDepth;
       sy[idx] = projectY(y, z, viewDepth);
     }
   }
 
   ctx.lineJoin = 'round';
-  ctx.shadowColor = rgb(lineColor);
+
+  // Line and surface colours run from their near colour at the front row to their far
+  // colour at the last row
+  const lineColorAt = (row: number) => mix(lineColor, config.lineColorFar, row / rows);
+  const surfaceColorAt = (row: number) => mix(surfaceColor, config.surfaceColorFar, row / rows);
 
   const setLineStyle = (row: number) => {
     const depth = Math.min(1, (row * cellSize) / drawDistance);
+    const color = lineColorAt(row);
+    ctx.shadowColor = rgb(color);
     ctx.shadowBlur = glow * 20 * scale;
-    ctx.strokeStyle = rgb(lineColor, 1 - fog * Math.pow(depth, 1.5));
+    ctx.strokeStyle = rgb(color, 1 - fog * Math.pow(depth, 1.5));
     ctx.lineWidth = Math.max(0.5, lineWidth * scale * (1 - 0.6 * depth));
   };
 
@@ -194,13 +215,51 @@ function drawTerrain(ctx: CanvasRenderingContext2D, config: TerrainConfig, seed:
     const back = (j + 1) * stride;
     const front = j * stride;
 
+    const surface = surfaceColorAt(j);
     ctx.shadowBlur = 0;
-    ctx.fillStyle = rgb(surfaceColor);
+    ctx.fillStyle = rgb(surface);
     ctx.beginPath();
     traceRow(j + 1);
     for (let i = cols; i >= 0; i--) ctx.lineTo(sx[front + i], sy[front + i]);
     ctx.closePath();
     ctx.fill();
+
+    if (shading > 0) {
+      const depth = Math.min(1, (j * cellSize) / drawDistance);
+      const strength = shading * 0.5 * (1 - fog * Math.pow(depth, 1.5));
+      const line = lineColorAt(j);
+      // Fill one face, tinted towards the line colour by how directly it faces the light.
+      // dhdx / dhdz are the face's slope to the right and away from the camera.
+      const fillFace = (dhdx: number, dhdz: number, a: number, b: number, c: number, d: number) => {
+        const lit = (LIGHT_X * -dhdx + LIGHT_Y + LIGHT_Z * -dhdz) / Math.sqrt(dhdx * dhdx + 1 + dhdz * dhdz);
+        const t = Math.max(0, lit) * strength;
+        ctx.fillStyle = rgb(mix(surface, line, t));
+        ctx.beginPath();
+        ctx.moveTo(sx[a], sy[a]);
+        ctx.lineTo(sx[b], sy[b]);
+        ctx.lineTo(sx[c], sy[c]);
+        if (d >= 0) ctx.lineTo(sx[d], sy[d]);
+        ctx.closePath();
+        ctx.fill();
+      };
+      for (let i = 0; i < cols; i++) {
+        const b0 = back + i;
+        const b1 = b0 + 1;
+        const f0 = front + i;
+        const f1 = f0 + 1;
+        if (meshStyle === 'triangles') {
+          // Two flat triangles per cell, split along the same diagonal as the lines
+          fillFace((hs[b1] - hs[b0]) / cellSize, (hs[b1] - hs[f1]) / cellSize, b0, b1, f1, -1);
+          fillFace((hs[f1] - hs[f0]) / cellSize, (hs[b0] - hs[f0]) / cellSize, b0, f1, f0, -1);
+        } else {
+          fillFace(
+            (hs[b1] + hs[f1] - hs[b0] - hs[f0]) / (2 * cellSize),
+            (hs[b0] + hs[b1] - hs[f0] - hs[f1]) / (2 * cellSize),
+            b0, b1, f1, f0
+          );
+        }
+      }
+    }
 
     ctx.beginPath();
     traceRow(edgeRow);
