@@ -229,14 +229,26 @@ export function TerrainControlPanel({ config, onChange, onRegenerate }: TerrainC
               max={0.5}
               step={0.01}
             />
-            <SliderField
-              label={`Valley Width: ${config.valleyWidth}`}
-              value={config.valleyWidth}
-              onChange={(valleyWidth) => onChange({ valleyWidth })}
-              min={0}
-              max={30}
-              step={1}
+            <FormControlLabel
+              control={
+                <Switch
+                  size="small"
+                  checked={config.showValley}
+                  onChange={(e) => onChange({ showValley: e.target.checked })}
+                />
+              }
+              label={<Typography variant="body2">Valley</Typography>}
             />
+            {config.showValley && (
+              <SliderField
+                label={`Valley Width: ${config.valleyWidth}`}
+                value={config.valleyWidth}
+                onChange={(valleyWidth) => onChange({ valleyWidth })}
+                min={0}
+                max={30}
+                step={1}
+              />
+            )}
           </Stack>
         </AccordionDetails>
       </Accordion>
@@ -257,10 +269,18 @@ export function TerrainControlPanel({ config, onChange, onRegenerate }: TerrainC
               step={0.1}
             />
             <SliderField
-              label={`Horizon: ${(config.horizon * 100).toFixed(0)}%`}
+              label={`Camera Angle: ${config.cameraAngle}°`}
+              value={config.cameraAngle}
+              onChange={(cameraAngle) => onChange({ cameraAngle })}
+              min={0}
+              max={90}
+              step={1}
+            />
+            <SliderField
+              label={`Horizon:${(config.horizon * 100).toFixed(0)}%`}
               value={config.horizon}
               onChange={(horizon) => onChange({ horizon })}
-              min={0.1}
+              min={-0.5}
               max={0.9}
               step={0.01}
             />

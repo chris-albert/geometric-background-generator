@@ -57,9 +57,11 @@ function fbm(x: number, z: number, seed: number): number {
 const VALLEY_RAMP = 10;
 
 function terrainHeightAt(x: number, z: number, config: TerrainConfig, seed: number): number {
-  const { terrainHeight, roughness, valleyWidth } = config;
+  const { terrainHeight, roughness, showValley, valleyWidth } = config;
+  const height = terrainHeight * fbm(x * roughness, z * roughness, seed);
+  if (!showValley) return height;
   const edge = Math.min(1, Math.max(0, (Math.abs(x) - valleyWidth) / VALLEY_RAMP));
-  return terrainHeight * fbm(x * roughness, z * roughness, seed) * smooth(edge);
+  return height * smooth(edge);
 }
 
 function drawSun(ctx: CanvasRenderingContext2D, config: TerrainConfig, groundY: number, scale: number) {
@@ -103,31 +105,58 @@ function drawTerrain(ctx: CanvasRenderingContext2D, config: TerrainConfig, seed:
   const scale = width / 1920;
   const horizonY = height * horizon;
   const focal = width * 0.6;
+  // Camera height is clearance above the ground beneath it: the valley floor, or with no
+  // valley the tallest possible peak, so the camera never ends up inside the terrain
+  const cameraY = cameraHeight + (config.showValley ? 0 : config.terrainHeight);
 
-  // Grid extents: start just in front of the bottom edge of the canvas and make the
-  // far edge wide enough to span the whole view
-  const zNear = Math.max(0.5, ((focal * cameraHeight) / (height - horizonY)) * 0.5);
-  const rows = Math.ceil(drawDistance / cellSize);
+  // The camera sits at (0, cameraY, 0) looking along +z, tilted down by cameraAngle
+  const pitch = (config.cameraAngle * Math.PI) / 180;
+  const sinP = Math.sin(pitch);
+  const cosP = Math.cos(pitch);
+
+  // z at which the view ray through a given canvas row hits a horizontal plane `clearance`
+  // below the camera (Infinity if that ray never comes down)
+  const rayHitZ = (screenY: number, clearance: number): number => {
+    const rayY = (horizonY - screenY) / focal;
+    const down = sinP - rayY * cosP;
+    return down > 1e-6 ? (clearance / down) * (rayY * sinP + cosP) : Infinity;
+  };
+
+  // Grid extents: start in front of the bottom edge of the canvas, stop at the draw distance
+  // or where the top edge of the canvas meets the terrain, and span the full view width
+  let zNear = Math.min(rayHitZ(height, cameraHeight), rayHitZ(height, cameraY));
+  if (!isFinite(zNear)) zNear = 1;
+  zNear -= Math.max(cellSize, Math.abs(zNear) * 0.5);
+  const peakClearance = cameraY - config.terrainHeight;
+  const zTop = Math.max(rayHitZ(0, cameraY), peakClearance > 0 ? rayHitZ(0, peakClearance) : Infinity);
+  const rows = Math.max(1, Math.ceil(Math.min(drawDistance, zTop + cellSize - zNear) / cellSize));
   const zFar = zNear + rows * cellSize;
-  const halfCols = Math.ceil(((width / 2 / focal) * zFar) / cellSize) + 1;
+  const maxViewDepth = cameraY * sinP + Math.max(zNear * cosP, zFar * cosP);
+  const halfCols = Math.ceil(((width / 2 / focal) * maxViewDepth) / cellSize) + 1;
   const cols = halfCols * 2;
   const stride = cols + 1;
 
-  // The far edge of the grid sits slightly below the true horizon, so the sky runs down to it
-  const groundY = horizonY + (focal * cameraHeight) / zFar;
+  // Screen position of world point (x, y, z)
+  const projectY = (y: number, z: number, viewDepth: number): number =>
+    horizonY - (focal * ((y - cameraY) * cosP + z * sinP)) / viewDepth;
+  const viewDepthOf = (y: number, z: number): number =>
+    Math.max(0.01, (cameraY - y) * sinP + z * cosP);
 
-  // Sky
-  const sky = ctx.createLinearGradient(0, 0, 0, groundY);
-  sky.addColorStop(0, rgb(skyTopColor));
-  sky.addColorStop(1, rgb(skyHorizonColor));
-  ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, width, groundY);
+  // The sky runs down to the far edge of the grid, which sits slightly below the true horizon
+  const groundY = Math.min(height, projectY(0, zFar, viewDepthOf(0, zFar)));
+  if (groundY > 0) {
+    const sky = ctx.createLinearGradient(0, 0, 0, groundY);
+    sky.addColorStop(0, rgb(skyTopColor));
+    sky.addColorStop(1, rgb(skyHorizonColor));
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, width, groundY);
 
-  if (showSun) drawSun(ctx, config, groundY, scale);
+    if (showSun) drawSun(ctx, config, groundY, scale);
+  }
 
   // Ground
   ctx.fillStyle = rgb(surfaceColor);
-  ctx.fillRect(0, groundY, width, height - groundY);
+  ctx.fillRect(0, Math.max(0, groundY), width, height);
 
   // Project every vertex to screen space
   const sx = new Float32Array((rows + 1) * stride);
@@ -137,32 +166,44 @@ function drawTerrain(ctx: CanvasRenderingContext2D, config: TerrainConfig, seed:
     for (let i = 0; i <= cols; i++) {
       const x = (i - halfCols) * cellSize;
       const y = terrainHeightAt(x, z, config, seed);
+      const viewDepth = viewDepthOf(y, z);
       const idx = j * stride + i;
-      sx[idx] = width / 2 + (focal * x) / z;
-      sy[idx] = horizonY + (focal * (cameraHeight - y)) / z;
+      sx[idx] = width / 2 + (focal * x) / viewDepth;
+      sy[idx] = projectY(y, z, viewDepth);
     }
   }
 
-  // Paint strips back to front; each strip's fill hides the lines behind it
   ctx.lineJoin = 'round';
   ctx.shadowColor = rgb(lineColor);
-  for (let j = rows - 1; j >= 0; j--) {
+
+  const setLineStyle = (row: number) => {
+    const depth = Math.min(1, (row * cellSize) / drawDistance);
+    ctx.shadowBlur = glow * 20 * scale;
+    ctx.strokeStyle = rgb(lineColor, 1 - fog * Math.pow(depth, 1.5));
+    ctx.lineWidth = Math.max(0.5, lineWidth * scale * (1 - 0.6 * depth));
+  };
+
+  const traceRow = (row: number) => {
+    const start = row * stride;
+    ctx.moveTo(sx[start], sy[start]);
+    for (let i = 1; i <= cols; i++) ctx.lineTo(sx[start + i], sy[start + i]);
+  };
+
+  // Fill the strip between rows j and j + 1, then draw its lines plus one of its two edge rows
+  const drawStrip = (j: number, edgeRow: number) => {
     const back = (j + 1) * stride;
     const front = j * stride;
-    const depth = (j + 1) / rows;
 
     ctx.shadowBlur = 0;
     ctx.fillStyle = rgb(surfaceColor);
     ctx.beginPath();
-    ctx.moveTo(sx[back], sy[back]);
-    for (let i = 1; i <= cols; i++) ctx.lineTo(sx[back + i], sy[back + i]);
+    traceRow(j + 1);
     for (let i = cols; i >= 0; i--) ctx.lineTo(sx[front + i], sy[front + i]);
     ctx.closePath();
     ctx.fill();
 
     ctx.beginPath();
-    ctx.moveTo(sx[back], sy[back]);
-    for (let i = 1; i <= cols; i++) ctx.lineTo(sx[back + i], sy[back + i]);
+    traceRow(edgeRow);
     if (meshStyle !== 'ridges') {
       for (let i = 0; i <= cols; i++) {
         ctx.moveTo(sx[back + i], sy[back + i]);
@@ -175,11 +216,22 @@ function drawTerrain(ctx: CanvasRenderingContext2D, config: TerrainConfig, seed:
         ctx.lineTo(sx[front + i + 1], sy[front + i + 1]);
       }
     }
-    ctx.shadowBlur = glow * 20 * scale;
-    ctx.strokeStyle = rgb(lineColor, 1 - fog * Math.pow(depth, 1.5));
-    ctx.lineWidth = Math.max(0.5, lineWidth * scale * (1 - 0.6 * depth));
+    setLineStyle(edgeRow);
     ctx.stroke();
-  }
+  };
+
+  // Paint strips farthest-first so each strip's fill hides the lines behind it. When the
+  // camera tilts far enough to see ground behind it (z < 0), those strips are painted
+  // outside-in first, then the strips ahead of the camera from the far edge inwards.
+  const firstRowAhead = Math.min(rows, Math.max(0, Math.ceil(-zNear / cellSize)));
+  for (let j = 0; j < firstRowAhead; j++) drawStrip(j, j);
+  for (let j = rows - 1; j >= firstRowAhead; j--) drawStrip(j, j + 1);
+
+  // The row where the two passes meet is not drawn by either
+  ctx.beginPath();
+  traceRow(firstRowAhead);
+  setLineStyle(firstRowAhead);
+  ctx.stroke();
   ctx.shadowBlur = 0;
 }
 

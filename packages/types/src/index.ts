@@ -149,9 +149,11 @@ export interface TerrainConfig {
   // Terrain shape
   terrainHeight: number; // peak height in world units
   roughness: number; // noise frequency
+  showValley: boolean; // flat strip down the middle; when off the camera flies over open terrain
   valleyWidth: number; // half-width of the flat strip down the middle, world units
   // Camera
   cameraHeight: number; // world units above the ground
+  cameraAngle: number; // degrees tilted down from level; 90 looks straight down
   horizon: number; // 0-1, horizon position from the top of the canvas
   // Lines
   lineColor: RGB;
@@ -176,8 +178,10 @@ export const defaultTerrainConfig: TerrainConfig = {
   drawDistance: 60,
   terrainHeight: 7,
   roughness: 0.12,
+  showValley: false,
   valleyWidth: 4,
   cameraHeight: 2,
+  cameraAngle: 0,
   horizon: 0.5,
   lineColor: { r: 255, g: 45, b: 200 },
   lineWidth: 2,
@@ -186,7 +190,7 @@ export const defaultTerrainConfig: TerrainConfig = {
   surfaceColor: { r: 12, g: 4, b: 32 },
   skyTopColor: { r: 10, g: 2, b: 35 },
   skyHorizonColor: { r: 120, g: 20, b: 110 },
-  showSun: true,
+  showSun: false,
   sunSize: 0.22,
   sunTopColor: { r: 255, g: 220, b: 80 },
   sunBottomColor: { r: 255, g: 40, b: 140 },
