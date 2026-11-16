@@ -156,11 +156,13 @@ export interface TerrainConfig {
   cameraAngle: number; // degrees tilted down from level; 90 looks straight down
   horizon: number; // 0-1, horizon position from the top of the canvas
   // Lines
-  lineColor: RGB;
+  lineColor: RGB; // at the near edge
+  lineColorFar: RGB; // at the far edge
   lineWidth: number;
   glow: number; // 0-1
   fog: number; // 0-1, how much lines fade towards the horizon
-  surfaceColor: RGB;
+  surfaceColor: RGB; // at the near edge
+  surfaceColorFar: RGB; // at the far edge
   shading: number; // 0-1, how strongly faces are lit by a directional light
   // Sky
   skyTopColor: RGB;
@@ -185,10 +187,12 @@ export const defaultTerrainConfig: TerrainConfig = {
   cameraAngle: 0,
   horizon: 0.5,
   lineColor: { r: 255, g: 45, b: 200 },
+  lineColorFar: { r: 60, g: 140, b: 255 },
   lineWidth: 2,
   glow: 0.6,
   fog: 0.85,
   surfaceColor: { r: 12, g: 4, b: 32 },
+  surfaceColorFar: { r: 4, g: 14, b: 48 },
   shading: 0.5,
   skyTopColor: { r: 10, g: 2, b: 35 },
   skyHorizonColor: { r: 120, g: 20, b: 110 },
