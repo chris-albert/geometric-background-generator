@@ -9,10 +9,16 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TerrainRouteImport } from './routes/terrain'
 import { Route as FractalRouteImport } from './routes/fractal'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 
+const TerrainRoute = TerrainRouteImport.update({
+  id: '/terrain',
+  path: '/terrain',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const FractalRoute = FractalRouteImport.update({
   id: '/fractal',
   path: '/fractal',
@@ -33,34 +39,45 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/fractal': typeof FractalRoute
+  '/terrain': typeof TerrainRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/fractal': typeof FractalRoute
+  '/terrain': typeof TerrainRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/fractal': typeof FractalRoute
+  '/terrain': typeof TerrainRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/about' | '/fractal'
+  fullPaths: '/' | '/about' | '/fractal' | '/terrain'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/about' | '/fractal'
-  id: '__root__' | '/' | '/about' | '/fractal'
+  to: '/' | '/about' | '/fractal' | '/terrain'
+  id: '__root__' | '/' | '/about' | '/fractal' | '/terrain'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
   FractalRoute: typeof FractalRoute
+  TerrainRoute: typeof TerrainRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/terrain': {
+      id: '/terrain'
+      path: '/terrain'
+      fullPath: '/terrain'
+      preLoaderRoute: typeof TerrainRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/fractal': {
       id: '/fractal'
       path: '/fractal'
@@ -89,6 +106,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
   FractalRoute: FractalRoute,
+  TerrainRoute: TerrainRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

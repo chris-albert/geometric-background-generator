@@ -20,6 +20,7 @@ import MenuIcon from '@mui/icons-material/Menu';
 import InfoIcon from '@mui/icons-material/Info';
 import GridViewIcon from '@mui/icons-material/GridView';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import LandscapeIcon from '@mui/icons-material/Landscape';
 
 export const Route = createRootRoute({
   component: RootLayout,
@@ -47,6 +48,13 @@ const generators: GeneratorItem[] = [
     description: 'Mandelbrot, Julia sets and more',
     path: '/fractal',
     icon: <AutoAwesomeIcon />,
+  },
+  {
+    id: 'terrain',
+    name: '3D Terrain',
+    description: 'Synthwave wireframe landscapes',
+    path: '/terrain',
+    icon: <LandscapeIcon />,
   },
 ];
 

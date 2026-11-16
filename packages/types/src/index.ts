@@ -134,8 +134,66 @@ export const defaultFractalConfig: FractalConfig = {
   interiorColor: { r: 0, g: 0, b: 0 },
 };
 
+// 3D terrain types
+export type TerrainMeshStyle = 'grid' | 'triangles' | 'ridges';
+
+export const terrainMeshStyles: TerrainMeshStyle[] = ['grid', 'triangles', 'ridges'];
+
+export interface TerrainConfig {
+  width: number;
+  height: number;
+  // Mesh
+  meshStyle: TerrainMeshStyle;
+  cellSize: number; // world units per grid cell
+  drawDistance: number; // world units from camera to far edge
+  // Terrain shape
+  terrainHeight: number; // peak height in world units
+  roughness: number; // noise frequency
+  valleyWidth: number; // half-width of the flat strip down the middle, world units
+  // Camera
+  cameraHeight: number; // world units above the ground
+  horizon: number; // 0-1, horizon position from the top of the canvas
+  // Lines
+  lineColor: RGB;
+  lineWidth: number;
+  glow: number; // 0-1
+  fog: number; // 0-1, how much lines fade towards the horizon
+  surfaceColor: RGB;
+  // Sky
+  skyTopColor: RGB;
+  skyHorizonColor: RGB;
+  showSun: boolean;
+  sunSize: number; // radius as a fraction of canvas height
+  sunTopColor: RGB;
+  sunBottomColor: RGB;
+}
+
+export const defaultTerrainConfig: TerrainConfig = {
+  width: 1920,
+  height: 1080,
+  meshStyle: 'grid',
+  cellSize: 1,
+  drawDistance: 60,
+  terrainHeight: 7,
+  roughness: 0.12,
+  valleyWidth: 4,
+  cameraHeight: 2,
+  horizon: 0.5,
+  lineColor: { r: 255, g: 45, b: 200 },
+  lineWidth: 2,
+  glow: 0.6,
+  fog: 0.85,
+  surfaceColor: { r: 12, g: 4, b: 32 },
+  skyTopColor: { r: 10, g: 2, b: 35 },
+  skyHorizonColor: { r: 120, g: 20, b: 110 },
+  showSun: true,
+  sunSize: 0.22,
+  sunTopColor: { r: 255, g: 220, b: 80 },
+  sunBottomColor: { r: 255, g: 40, b: 140 },
+};
+
 // Generator style types for navigation
-export type GeneratorStyle = 'geometric' | 'fractal';
+export type GeneratorStyle = 'geometric' | 'fractal' | 'terrain';
 
 export interface GeneratorInfo {
   id: GeneratorStyle;
